@@ -7,8 +7,8 @@
 
 using namespace std;
 
-#define MAX_BUFOR   50
-#define MAX_SLEEP_TIME 2
+#define MAX_BUFOR   10
+#define MAX_SLEEP_TIME 7
 
 int id_wiadomosci_licznik = 0;
 
@@ -21,14 +21,12 @@ struct Wiadomosc {
 
 
 class Czytelnia : Monitor {
-    Condition pusta[2], pelna[2];
+    Condition pusta[2], pelna[2], czy_ktos_czyta[2];
     Wiadomosc bufor[MAX_BUFOR];
     queue <Wiadomosc> bufor1;
     queue <Wiadomosc> bufor2;
     int liczba_elementow[2];
     int ile_czytelnikow[2];
-
-
 
     void insertQueue( Wiadomosc nowa  );
 	void popQueue( int );
@@ -61,8 +59,11 @@ Czytelnia::Czytelnia( )
 void Czytelnia::dodaj( Wiadomosc nowa ) {
     enter();
 
-    if( liczba_elementow[ nowa.id_kolejki ] == MAX_BUFOR || ile_czytelnikow[nowa.id_kolejki] > 0 ) {
+    if( liczba_elementow[ nowa.id_kolejki ] == MAX_BUFOR ) {
         wait( pelna[ nowa.id_kolejki ] );
+    }
+    if( ile_czytelnikow[nowa.id_kolejki] > 0 ) {
+        wait( czy_ktos_czyta[ nowa.id_kolejki ] );
     }
     insertQueue( nowa );
     liczba_elementow[ nowa.id_kolejki ]++;
@@ -86,8 +87,8 @@ void Czytelnia::sprawdz( int nrListy ) {
     ile_czytelnikow[ nrListy ]++;
     cout << "Przeczytano: " << bufor[nrListy * MAX_BUFOR].id_wiadomosci << " / " << bufor[nrListy * MAX_BUFOR].id_producenta << endl;
     ile_czytelnikow[ nrListy ]--;
-    if( ile_czytelnikow[ nrListy ] == MAX_BUFOR-1 ) {
-        signal(pelna[ nrListy ]);
+    if( ile_czytelnikow[ nrListy ] == 0 ) {
+        signal(czy_ktos_czyta[ nrListy ]);
     }
     leave();
 }
@@ -95,8 +96,11 @@ void Czytelnia::sprawdz( int nrListy ) {
 void Czytelnia::usun( int nrListy ) {
 
     enter();
-    if( liczba_elementow[ nrListy ] == 0 || ile_czytelnikow[ nrListy ] > 0 ) {
+    if( liczba_elementow[ nrListy ] == 0 ) {
         wait( pusta[nrListy ] );
+    }
+    if( ile_czytelnikow[ nrListy ] > 0 ) {
+        wait( czy_ktos_czyta[ nrListy ] );
     }
 
     cout << "Usunieto z kolejki " << nrListy + 1 << ": " << bufor[nrListy * MAX_BUFOR].id_wiadomosci << endl;
@@ -156,14 +160,13 @@ void* pisarz_konsument( void *ptr ) {
 	}
 }
 
-void* czytelnik( Czytelnik cz ) {
-     //int nrListy = 1;
-    cz.nrListy--;
-   // Czytelnia *czyt = ( Czytelnia* )ptr;
-   Czytelnia *czyt = ( Czytelnia* )cz.czytPtr;
+void* czytelnik( void *p ) {
+    Czytelnik *cz = (Czytelnik*)p;
+    cz->nrListy--;
+    Czytelnia *czyt = ( Czytelnia* )cz->czytPtr;
 	while( 1 ) {
-        czyt->sprawdz(cz.nrListy);
-		sleep( rand( ) % MAX_SLEEP_TIME );
+        czyt->sprawdz(cz->nrListy);
+		sleep( rand( ) % (MAX_SLEEP_TIME - 1) );
 	}
 }
 
@@ -172,21 +175,27 @@ int main( void) {
     Czytelnik cz;
     cz.czytPtr = new Czytelnia();
     cz.nrListy = 1;
-    Czytelnia *czytPtr = new Czytelnia();
     pthread_t prod_t, kons_t, czyt_t;
 
 
-    if( pthread_create( &kons_t, NULL, pisarz_konsument, ( void * )czytPtr ) != 0 ) {
+
+
+    if( pthread_create( &prod_t, NULL, pisarz_producent, ( void * )cz.czytPtr ) != 0 ) {
+		printf( "Nie udalo sie stworzyc watku producenta\n" );
+	}
+
+    if( pthread_create( &kons_t, NULL, pisarz_konsument, ( void * )cz.czytPtr ) != 0 ) {
 		printf( "Nie udalo sie stworzyc watku konsumenta\n" );
 	}
 
-    if( pthread_create( &prod_t, NULL, pisarz_producent, ( void * )czytPtr ) != 0 ) {
+	if( pthread_create( &czyt_t, NULL, czytelnik, ( void * )&cz ) != 0 ) {
 		printf( "Nie udalo sie stworzyc watku producenta\n" );
 	}
 
-	/*if( pthread_create( &czyt_t, NULL, czytelnik, ( void * )cz ) != 0 ) {
+	cz.nrListy = 2;
+	if( pthread_create( &czyt_t, NULL, czytelnik, ( void * )&cz ) != 0 ) {
 		printf( "Nie udalo sie stworzyc watku producenta\n" );
-	}*/
+	}
 
     while( 1 ) {
 
