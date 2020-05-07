@@ -7,7 +7,7 @@
 
 using namespace std;
 
-#define MAX_BUFOR   10
+#define MAX_BUFOR   40
 #define MAX_SLEEP_TIME 7
 
 int id_wiadomosci_licznik = 0;
@@ -21,15 +21,17 @@ struct Wiadomosc {
 
 
 class Czytelnia : Monitor {
-    Condition pusta[2], pelna[2], czy_ktos_czyta[2];
+    Condition pusta[2], pelna[2], czy_ktos_czyta[2], nowa_wiad[2];
     Wiadomosc bufor[MAX_BUFOR];
     queue <Wiadomosc> bufor1;
     queue <Wiadomosc> bufor2;
     int liczba_elementow[2];
     int ile_czytelnikow[2];
+    int ostatnioPrzeczyt[2];
 
     void insertQueue( Wiadomosc nowa  );
 	void popQueue( int );
+	int id_ostatniejWiad(Wiadomosc bufor[], int nrListy);
 
 public:
 	Czytelnia( );
@@ -50,6 +52,7 @@ Czytelnia::Czytelnia( )
     int i;
 	liczba_elementow[0] = liczba_elementow[1] = 0;
 	ile_czytelnikow[0] = ile_czytelnikow[1] = 0;
+	ostatnioPrzeczyt[0] = ostatnioPrzeczyt[1] = -1;
 
 	for ( i = 0; i < 2 * MAX_BUFOR; i++ ) {
 		bufor[i].id_wiadomosci = -1;
@@ -73,6 +76,7 @@ void Czytelnia::dodaj( Wiadomosc nowa ) {
     if( liczba_elementow[ nowa.id_kolejki ] == 1 ) {
         signal(pusta[ nowa.id_kolejki ]);
     }
+    signal(nowa_wiad[ nowa.id_kolejki ]);
     leave();
 
 
@@ -84,8 +88,12 @@ void Czytelnia::sprawdz( int nrListy ) {
     if( liczba_elementow[ nrListy ] == 0 ) {
         wait( pusta[nrListy ] );
     }
+    if( ostatnioPrzeczyt[nrListy] == id_ostatniejWiad(bufor, nrListy) ) {
+        wait( nowa_wiad[nrListy] );
+    }
     ile_czytelnikow[ nrListy ]++;
-    cout << "Przeczytano: " << bufor[nrListy * MAX_BUFOR].id_wiadomosci << " / " << bufor[nrListy * MAX_BUFOR].id_producenta << endl;
+    cout << "Przeczytano: " << id_ostatniejWiad(bufor, nrListy) << "  z kolejki numer: " << nrListy + 1 << endl;
+    ostatnioPrzeczyt[nrListy] = id_ostatniejWiad(bufor, nrListy);
     ile_czytelnikow[ nrListy ]--;
     if( ile_czytelnikow[ nrListy ] == 0 ) {
         signal(czy_ktos_czyta[ nrListy ]);
@@ -108,7 +116,7 @@ void Czytelnia::usun( int nrListy ) {
     popQueue( nrListy );
     liczba_elementow[ nrListy ]--;
 
-    if( liczba_elementow[ nrListy ] == MAX_BUFOR-1 ) {
+    if( liczba_elementow[ nrListy ] == (MAX_BUFOR-1) ) {
         signal(pelna[ nrListy ]);
     }
 
@@ -135,6 +143,14 @@ void Czytelnia::popQueue( int nrListy ) {
 	bufor[nrListy * MAX_BUFOR + i].id_wiadomosci = -1;
 }
 
+int Czytelnia::id_ostatniejWiad(Wiadomosc bufor[], int nrListy) {
+    int i = 0;
+    while ( bufor[nrListy * MAX_BUFOR + i].id_wiadomosci != -1 ) {
+		i++;
+	}
+	return bufor[nrListy * MAX_BUFOR + i -1 ].id_wiadomosci;
+}
+
 void* pisarz_producent( void *ptr ) {
     Czytelnia *czyt = ( Czytelnia* )ptr;
     while( 1 ) {
@@ -155,7 +171,7 @@ void* pisarz_konsument( void *ptr ) {
 		for ( nrListy = 0; nrListy < 2; nrListy++ ) {
             czyt->usun(nrListy);
 		}
-		sleep( rand( ) % MAX_SLEEP_TIME );
+		sleep( rand( ) % MAX_SLEEP_TIME - 5 );
 
 	}
 }
@@ -166,7 +182,7 @@ void* czytelnik( void *p ) {
     Czytelnia *czyt = ( Czytelnia* )cz->czytPtr;
 	while( 1 ) {
         czyt->sprawdz(cz->nrListy);
-		sleep( rand( ) % (MAX_SLEEP_TIME - 1) );
+		sleep( rand( ) % ( MAX_SLEEP_TIME ) );
 	}
 }
 
@@ -192,10 +208,10 @@ int main( void) {
 		printf( "Nie udalo sie stworzyc watku producenta\n" );
 	}
 
-	cz.nrListy = 2;
+	/*cz.nrListy = 2;
 	if( pthread_create( &czyt_t, NULL, czytelnik, ( void * )&cz ) != 0 ) {
 		printf( "Nie udalo sie stworzyc watku producenta\n" );
-	}
+	}*/
 
     while( 1 ) {
 
