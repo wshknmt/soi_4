@@ -7,11 +7,12 @@
 
 using namespace std;
 
-#define MAX_BUFOR   40
-#define MAX_SLEEP_TIME 7
+#define MAX_BUFOR   60
+#define MAX_SLEEP_TIME 8
 
-int id_wiadomosci_licznik = 0;
+int id_wiadomosci_licznik = 0; //zapewnia unikatowe id wiadomosci
 
+//struktura do przechowywania pojedynczej wiadomosci utworzonej przez producenta
 struct Wiadomosc {
 	int id_kolejki;
 	int id_producenta;
@@ -22,16 +23,16 @@ struct Wiadomosc {
 
 class Czytelnia : Monitor {
     Condition pusta[2], pelna[2], czy_ktos_czyta[2], nowa_wiad[2];
-    Wiadomosc bufor[MAX_BUFOR];
+    Wiadomosc bufor[MAX_BUFOR];////tu sa 2 kolejki FIFO do przechowywania wiadomosci
     queue <Wiadomosc> bufor1;
     queue <Wiadomosc> bufor2;
-    int liczba_elementow[2];
-    int ile_czytelnikow[2];
-    int ostatnioPrzeczyt[2];
+    int liczba_elementow[2]; //liczba istniejacych elementow w kazdej z kolejek
+    int ile_czytelnikow[2]; //liczba aktualnie czytajacych czytelnikow
+    int ostatnioPrzeczyt[2]; //przechowuje ostatnio czytane id wiadomosci
 
-    void insertQueue( Wiadomosc nowa  );
-	void popQueue( int );
-	int id_ostatniejWiad(Wiadomosc bufor[], int nrListy);
+    void insertQueue( Wiadomosc nowa  ); //wstawianie wiadomosci do kolejki
+	void popQueue( int ); //usuwanie wiadomosci z kolejki
+	int id_ostatniejWiad(Wiadomosc bufor[], int nrListy); //zwraca id wiadomosci znajdujacej sie na koncu danej kolejki
 
 public:
 	Czytelnia( );
@@ -40,6 +41,7 @@ public:
 	void sprawdz( int nrListy );
 };
 
+//struktura ktora jest przekazywana jako argument w funkcji tworzacej nowy watek
 struct Czytelnik {
     Czytelnia *czytPtr;
     int nrListy;
@@ -54,6 +56,7 @@ Czytelnia::Czytelnia( )
 	ile_czytelnikow[0] = ile_czytelnikow[1] = 0;
 	ostatnioPrzeczyt[0] = ostatnioPrzeczyt[1] = -1;
 
+    //wyczyszczenie list
 	for ( i = 0; i < 2 * MAX_BUFOR; i++ ) {
 		bufor[i].id_wiadomosci = -1;
 	}
@@ -61,21 +64,23 @@ Czytelnia::Czytelnia( )
 
 void Czytelnia::dodaj( Wiadomosc nowa ) {
     enter();
-
+    //jezeli kolejka jest pelna czeka az sie zrobi miejsce
     if( liczba_elementow[ nowa.id_kolejki ] == MAX_BUFOR ) {
         wait( pelna[ nowa.id_kolejki ] );
     }
+    //gdy ktos czyta nie mozna dodawac ani usuwac
     if( ile_czytelnikow[nowa.id_kolejki] > 0 ) {
         wait( czy_ktos_czyta[ nowa.id_kolejki ] );
     }
     insertQueue( nowa );
-    liczba_elementow[ nowa.id_kolejki ]++;
+    liczba_elementow[ nowa.id_kolejki ]++; //zwiekszenie liczby elementow w kolejce
     cout << "Dodano do kolejki " << nowa.id_kolejki + 1 << ": " << nowa.id_wiadomosci << endl;
 
-
+    //jezeli dodany element jest pierwszy w tej kolejce to wznawia procesy ktore moze czekaly na pojawienie sie tu wiadomosci
     if( liczba_elementow[ nowa.id_kolejki ] == 1 ) {
         signal(pusta[ nowa.id_kolejki ]);
     }
+    //informuje czytelnikow ze jest nowa wiadomosc do przeczytania
     signal(nowa_wiad[ nowa.id_kolejki ]);
     leave();
 
@@ -84,17 +89,22 @@ void Czytelnia::dodaj( Wiadomosc nowa ) {
 
 void Czytelnia::sprawdz( int nrListy ) {
     enter();
-
+    //jezeli kolejka jest pusta czeka az cos zostanie dodane
     if( liczba_elementow[ nrListy ] == 0 ) {
         wait( pusta[nrListy ] );
     }
+    //sprawdza czy cos nowego przybylo w kolejce
     if( ostatnioPrzeczyt[nrListy] == id_ostatniejWiad(bufor, nrListy) ) {
         wait( nowa_wiad[nrListy] );
     }
+    //zwieksza liczbe czytelnikow operujacych na tej kolejce
     ile_czytelnikow[ nrListy ]++;
     cout << "Przeczytano: " << id_ostatniejWiad(bufor, nrListy) << "  z kolejki numer: " << nrListy + 1 << endl;
+    //uaktualnienie ostatniej wiadomosci
     ostatnioPrzeczyt[nrListy] = id_ostatniejWiad(bufor, nrListy);
+    //zmniejsza liczbe czytelnikow operujacych na tej kolejce
     ile_czytelnikow[ nrListy ]--;
+    //jezeli ktos czeka az wszyscy czytelnicy przestana czytac to zostanie wznowiony
     if( ile_czytelnikow[ nrListy ] == 0 ) {
         signal(czy_ktos_czyta[ nrListy ]);
     }
@@ -104,9 +114,11 @@ void Czytelnia::sprawdz( int nrListy ) {
 void Czytelnia::usun( int nrListy ) {
 
     enter();
+    //jezeli kolejka jest pusta czeka az cos zostanie dodane
     if( liczba_elementow[ nrListy ] == 0 ) {
-        wait( pusta[nrListy ] );
+        wait( pusta[ nrListy ] );
     }
+    //gdy ktos czyta nie mozna dodawac ani usuwac
     if( ile_czytelnikow[ nrListy ] > 0 ) {
         wait( czy_ktos_czyta[ nrListy ] );
     }
@@ -114,8 +126,8 @@ void Czytelnia::usun( int nrListy ) {
     cout << "Usunieto z kolejki " << nrListy + 1 << ": " << bufor[nrListy * MAX_BUFOR].id_wiadomosci << endl;
 
     popQueue( nrListy );
-    liczba_elementow[ nrListy ]--;
-
+    liczba_elementow[ nrListy ]--; //zmniejszenie liczby elementow w kolejce
+    //jezeli jakis producent czeka na wolne miejce to zostaje on wznowiony
     if( liczba_elementow[ nrListy ] == (MAX_BUFOR-1) ) {
         signal(pelna[ nrListy ]);
     }
@@ -151,18 +163,21 @@ int Czytelnia::id_ostatniejWiad(Wiadomosc bufor[], int nrListy) {
 	return bufor[nrListy * MAX_BUFOR + i -1 ].id_wiadomosci;
 }
 
+//watek producenta
 void* pisarz_producent( void *ptr ) {
     Czytelnia *czyt = ( Czytelnia* )ptr;
     while( 1 ) {
         Wiadomosc nowa;
-		nowa.id_kolejki = rand( ) % 2;
+        nowa.id_kolejki = rand( ) % 2;
 		nowa.id_producenta = getpid( );
 		nowa.id_wiadomosci = id_wiadomosci_licznik++;
+        if(nowa.id_wiadomosci == 0) nowa.id_kolejki = 1;
 		czyt->dodaj(nowa);
 		sleep( rand( ) % MAX_SLEEP_TIME );
     }
 }
 
+//watek konsumenta
 void* pisarz_konsument( void *ptr ) {
     Czytelnia *czyt = ( Czytelnia* )ptr;
     int nrListy;
@@ -171,11 +186,12 @@ void* pisarz_konsument( void *ptr ) {
 		for ( nrListy = 0; nrListy < 2; nrListy++ ) {
             czyt->usun(nrListy);
 		}
-		sleep( rand( ) % MAX_SLEEP_TIME - 5 );
+		sleep( rand( ) % MAX_SLEEP_TIME );
 
 	}
 }
 
+//watek czytelnika
 void* czytelnik( void *p ) {
     Czytelnik *cz = (Czytelnik*)p;
     cz->nrListy--;
@@ -191,27 +207,28 @@ int main( void) {
     Czytelnik cz;
     cz.czytPtr = new Czytelnia();
     cz.nrListy = 1;
-    pthread_t prod_t, kons_t, czyt_t;
+    pthread_t prod1_t,prod2_t, kons_t, czyt_t;//identyfikatory watkow
 
 
 
-
-    if( pthread_create( &prod_t, NULL, pisarz_producent, ( void * )cz.czytPtr ) != 0 ) {
+    //wywolujemy producenta
+    if( pthread_create( &prod1_t, NULL, pisarz_producent, ( void * )cz.czytPtr ) != 0 ) {
+		printf( "Nie udalo sie stworzyc watku producenta\n" );
+	}
+	if( pthread_create( &prod2_t, NULL, pisarz_producent, ( void * )cz.czytPtr ) != 0 ) {
 		printf( "Nie udalo sie stworzyc watku producenta\n" );
 	}
 
+	//wywolujemy konsumenta
     if( pthread_create( &kons_t, NULL, pisarz_konsument, ( void * )cz.czytPtr ) != 0 ) {
 		printf( "Nie udalo sie stworzyc watku konsumenta\n" );
 	}
 
+	//wywolujemy czytelnika
 	if( pthread_create( &czyt_t, NULL, czytelnik, ( void * )&cz ) != 0 ) {
-		printf( "Nie udalo sie stworzyc watku producenta\n" );
+		printf( "Nie udalo sie stworzyc watku czytenika\n" );
 	}
 
-	/*cz.nrListy = 2;
-	if( pthread_create( &czyt_t, NULL, czytelnik, ( void * )&cz ) != 0 ) {
-		printf( "Nie udalo sie stworzyc watku producenta\n" );
-	}*/
 
     while( 1 ) {
 
