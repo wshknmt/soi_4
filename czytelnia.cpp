@@ -6,6 +6,7 @@ przechowywanie wiadomosci utworzonych przez producentow w dwoch kolejkach
 usuwanie wiadomosci z tych kolejek przez producentow
 oraz czytanie tych wiadomosci przez czytelnikow
 */
+
 #include <iostream>
 #include "monitor.h"
 #include <thread>
@@ -28,9 +29,13 @@ struct Wiadomosc {
 
 };
 
-
 class Czytelnia : Monitor {
-    Condition pusta[2], pelna[2], czy_ktos_czyta[2], nowa_wiad[2];
+    //Zmienne warunkowe:
+    Condition pusta[2]; //informuje czy dana kolejka jest pusta
+    Condition pelna[2]; //informuje czy dana kolejka jest pelna
+    Condition czy_ktos_czyta[2]; //informuje czy w danej kolejce sa jacys czytelnicy
+    Condition nowa_wiad[2]; //informuje czy w danej kolejce pojawila sie nowsza wiadomosc
+
     Wiadomosc bufor[MAX_BUFOR];////tu sa 2 kolejki FIFO do przechowywania wiadomosci
     queue <Wiadomosc> bufor1;
     queue <Wiadomosc> bufor2;
@@ -44,9 +49,9 @@ class Czytelnia : Monitor {
 
 public:
 	Czytelnia( );
-	void dodaj( Wiadomosc nowa );
-	void usun( int nrListy );
-	void sprawdz( int nrListy );
+	void dodaj( Wiadomosc nowa ); //realizuje operacje producenta
+	void usun( int nrListy ); //realizuje operacje konsumenta
+	void sprawdz( int nrListy ); //realizuje operacje czytelnika
 };
 
 //struktura ktora jest przekazywana jako argument w funkcji tworzacej nowy watek
@@ -58,13 +63,12 @@ struct Czytelnik {
 
 Czytelnia::Czytelnia( )
 {
-
-    int i;
 	liczba_elementow[0] = liczba_elementow[1] = 0;
 	ile_czytelnikow[0] = ile_czytelnikow[1] = 0;
 	ostatnioPrzeczyt[0] = ostatnioPrzeczyt[1] = -1;
 
      //wyczyszczenie list
+    int i;
 	for ( i = 0; i < 2 * MAX_BUFOR; i++ ) {
 		bufor[i].id_wiadomosci = -1;
 	}
@@ -194,7 +198,6 @@ void* pisarz_konsument( void *ptr ) {
             czyt->usun(nrListy);
 		}
 		sleep( rand( ) % MAX_SLEEP_TIME );
-
 	}
 }
 
@@ -216,8 +219,6 @@ int main( void) {
     cz.nrListy = 1;
     pthread_t prod1_t,prod2_t, kons_t, czyt_t;//identyfikatory watkow
 
-
-
      //wywolujemy producenta
     if( pthread_create( &prod1_t, NULL, pisarz_producent, ( void * )cz.czytPtr ) != 0 ) {
 		printf( "Nie udalo sie stworzyc watku producenta\n" );
@@ -235,7 +236,6 @@ int main( void) {
 	if( pthread_create( &czyt_t, NULL, czytelnik, ( void * )&cz ) != 0 ) {
 		printf( "Nie udalo sie stworzyc watku czytenika\n" );
 	}
-
 
      while( 1 ) {
 
