@@ -1,3 +1,11 @@
+/*
+Nazwa pliku: czytelnia.cpp
+Autor: Pawel Martyniuk
+Opis: Program pozwala na:
+przechowywanie wiadomosci utworzonych przez producentow w dwoch kolejkach
+usuwanie wiadomosci z tych kolejek przez producentow
+oraz czytanie tych wiadomosci przez czytelnikow
+*/
 #include <iostream>
 #include "monitor.h"
 #include <thread>
@@ -28,7 +36,7 @@ class Czytelnia : Monitor {
     queue <Wiadomosc> bufor2;
     int liczba_elementow[2]; //liczba istniejacych elementow w kazdej z kolejek
     int ile_czytelnikow[2]; //liczba aktualnie czytajacych czytelnikow
-    int ostatnioPrzeczyt[2]; //przechowuje ostatnio czytane id wiadomosci
+  	int ostatnioPrzeczyt[2]; //przechowuje ostatnio czytane id wiadomosci
 
     void insertQueue( Wiadomosc nowa  ); //wstawianie wiadomosci do kolejki
 	void popQueue( int ); //usuwanie wiadomosci z kolejki
@@ -56,7 +64,7 @@ Czytelnia::Czytelnia( )
 	ile_czytelnikow[0] = ile_czytelnikow[1] = 0;
 	ostatnioPrzeczyt[0] = ostatnioPrzeczyt[1] = -1;
 
-    //wyczyszczenie list
+     //wyczyszczenie list
 	for ( i = 0; i < 2 * MAX_BUFOR; i++ ) {
 		bufor[i].id_wiadomosci = -1;
 	}
@@ -167,13 +175,13 @@ int Czytelnia::id_ostatniejWiad(Wiadomosc bufor[], int nrListy) {
 void* pisarz_producent( void *ptr ) {
     Czytelnia *czyt = ( Czytelnia* )ptr;
     while( 1 ) {
-        Wiadomosc nowa;
-        nowa.id_kolejki = rand( ) % 2;
-		nowa.id_producenta = getpid( );
-		nowa.id_wiadomosci = id_wiadomosci_licznik++;
-       
-		czyt->dodaj(nowa);
-		sleep( rand( ) % MAX_SLEEP_TIME );
+    Wiadomosc nowa;
+    nowa.id_kolejki = rand( ) % 2;
+    nowa.id_producenta = getpid( );
+    nowa.id_wiadomosci = id_wiadomosci_licznik++;
+    if(nowa.id_wiadomosci == 0) nowa.id_kolejki = 1;
+    czyt->dodaj(nowa);
+    sleep( rand( ) % MAX_SLEEP_TIME );
     }
 }
 
@@ -182,7 +190,6 @@ void* pisarz_konsument( void *ptr ) {
     Czytelnia *czyt = ( Czytelnia* )ptr;
     int nrListy;
 	while( 1 ) {
-
 		for ( nrListy = 0; nrListy < 2; nrListy++ ) {
             czyt->usun(nrListy);
 		}
@@ -193,12 +200,12 @@ void* pisarz_konsument( void *ptr ) {
 
 //watek czytelnika
 void* czytelnik( void *p ) {
-    Czytelnik *cz = (Czytelnik*)p;
-    cz->nrListy--;
-    Czytelnia *czyt = ( Czytelnia* )cz->czytPtr;
+     Czytelnik *cz = (Czytelnik*)p;
+     cz->nrListy--;
+     Czytelnia *czyt = ( Czytelnia* )cz->czytPtr;
 	while( 1 ) {
         czyt->sprawdz(cz->nrListy);
-		sleep( rand( ) % ( MAX_SLEEP_TIME ) );
+	    sleep( rand( ) % ( MAX_SLEEP_TIME ) );
 	}
 }
 
@@ -211,7 +218,7 @@ int main( void) {
 
 
 
-    //wywolujemy producenta
+     //wywolujemy producenta
     if( pthread_create( &prod1_t, NULL, pisarz_producent, ( void * )cz.czytPtr ) != 0 ) {
 		printf( "Nie udalo sie stworzyc watku producenta\n" );
 	}
@@ -230,12 +237,9 @@ int main( void) {
 	}
 
 
-    while( 1 ) {
+     while( 1 ) {
 
-    }
-
-
-
+     }
 
 	return 0;
 }
