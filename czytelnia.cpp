@@ -171,7 +171,7 @@ void* pisarz_producent( void *ptr ) {
         nowa.id_kolejki = rand( ) % 2;
 		nowa.id_producenta = getpid( );
 		nowa.id_wiadomosci = id_wiadomosci_licznik++;
-        if(nowa.id_wiadomosci == 0) nowa.id_kolejki = 1;
+       
 		czyt->dodaj(nowa);
 		sleep( rand( ) % MAX_SLEEP_TIME );
     }
