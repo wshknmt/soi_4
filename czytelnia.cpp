@@ -135,7 +135,7 @@ void Czytelnia::usun( int nrListy ) {
         wait( czy_ktos_czyta[ nrListy ] );
     }
 
-    cout << "Usunieto z kolejki " << nrListy + 1 << ": " << bufor[nrListy * MAX_BUFOR].id_wiadomosci << endl;
+    cout << "Usunieto z kolejki " << nrListy + 1 << " : " << bufor[nrListy * MAX_BUFOR].id_wiadomosci << endl;
 
     popQueue( nrListy );
     liczba_elementow[ nrListy ]--; //zmniejszenie liczby elementow w kolejce
